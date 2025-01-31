@@ -16,11 +16,12 @@ void serve_file(int client_socket) {
             "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
             "<html><body><h1>404 Not Found</h1></body></html>";
         send(client_socket, error_msg, strlen(error_msg), 0);
+        shutdown(client_socket, SHUT_WR);
         close(client_socket);
         return;
     }
 
-    char buffer[BUFFER_SIZE];
+    char buffer[4096];
     size_t bytes_read;
 
     // Send HTTP Header
@@ -33,8 +34,13 @@ void serve_file(int client_socket) {
     }
 
     fclose(file);
+    
+    // Properly close connection
+    shutdown(client_socket, SHUT_WR);
+    usleep(1000); // Give time to flush data
     close(client_socket);
 }
+
 
 void *handle_client(void *arg) {
     int client_socket = *(int *)arg;
