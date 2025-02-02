@@ -105,25 +105,58 @@ void *handle_client(void *arg) {
 }
 
 int main() {
-    int server_socket;
-    struct sockaddr_in server_address, client_address;
-    socklen_t address_len = sizeof(client_address);
+    int server_socket; //For the file descriptor, the file descriptor will be used to handle the socket by OS.
+    struct sockaddr_in server_address, client_address; //To store IPV4 address information
+    /*
+    Structure of sockaddr_in
+    struct sockaddr_in{
+        sa_family_t sin_family; // Address family
+        in_addr_t sin_addr; // Internet address
+        unsigned short sin_port; // Port number
+        char sin_zero[8]; // Padding to make the sockaddr_in structure the same size as sockaddr structure which is used for other address families.
+    }
+    */
+    socklen_t address_len = sizeof(client_address); // Getting the size of client_address, it will be used when accepting a connection to store the size of client's address.
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    /*
+     * socket() creates a new network socket and return a file descriptor.
+     * AF_INET (AF_* means address family) and SOCK_STREAM (SOCK_* means socket type) macros are from sys/socket.h which is included by arpa/inet.h
+     * AF_INET tells the socket function that you that you want to use IPV4 Addressing. If you wanted to use IPV6, you could have used AF_INET6
+     * SOCK_STREAM tell the socket function that socket type is TCP. If you wanted the socket type as UDP, you could have used SOCK_DGRAM instead of SOCK_STREAM.
+     * 3rd parameter is for defining the protocol to follow, in this case 0 which is default for TCP.
+     */
+
+    //If socket fails, server_socket's value will be -1, meaning failed to create a file descriptor.
     if (server_socket < 0) {
         perror("Socket creation failed");
-        exit(1);
+        exit(1); // Exiting the program because the server cannot continue without a socket.
     }
 
-    server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = INADDR_ANY;
-    server_address.sin_port = htons(PORT);
+    server_address.sin_family = AF_INET; // Setting the address family to IPV4
+    server_address.sin_addr.s_addr = INADDR_ANY; 
+    /*
+    * Setting the IP address to listen on.
+    * INADDR_ANY is a special constant that represent any available network interface on the machine.
+    * If you want to restict you server to listen on a specific IP address, you can define it like this:
+        server.sin_addr.s_addr = inet_addr("192.168.1.10");
+    */
+    server_address.sin_port = htons(PORT); // Define the port where the server will listen for incoming connections. htons() function converts the port number from host byte order to network byte order.
 
+    /*
+    * bind() function assigns the server_socket to a specific IP sddress and port number (from server_address)
+    * If bind() fails, that means another server is already using the spot or permissions are restricted.
+    */
     if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
         perror("Binding failed");
         exit(1);
     }
 
+    /*
+    * listen() funtion tells the OS that server_socket is now ready to accept incoming connections.
+    * The 50 is the backlog, the maximum numberof connections that can wait in the queue before they are accepted.
+    * If listen() fails, it shows an error message and exit the program. This might fail if the soocket was not properly bound or there is an issue with system resources.
+    */
     if (listen(server_socket, 50) < 0) {
         perror("Listening failed");
         exit(1);
@@ -131,13 +164,17 @@ int main() {
 
     printf("Server is running on http://localhost:%d\n", PORT);
 
+    // Run an infinity loop that will accept new clients continuously.
     while (1) {
-        int *client_socket = malloc(sizeof(int));
+        int *client_socket = malloc(sizeof(int)); //Dinamically allocate memmory for an int to store the client's socket descriptor.
         if (!client_socket) {
             perror("Memory allocation failed");
-            continue;
+            continue; //If memory allocation fails, loop will continue running.
         }
 
+        /*
+        * When a new client tries
+        */
         *client_socket = accept(server_socket, (struct sockaddr *)&client_address, &address_len);
         if (*client_socket < 0) {
             perror("Accepting failed");
