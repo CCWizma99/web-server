@@ -173,7 +173,8 @@ int main() {
         }
 
         /*
-        * When a new client tries
+        * When a new client tries to connect, a new socket descriptor is assigned to *client_socket.
+        * If accept() fails, it will print an error message and free the client_socket and continue the loop again.
         */
         *client_socket = accept(server_socket, (struct sockaddr *)&client_address, &address_len);
         if (*client_socket < 0) {
@@ -182,15 +183,28 @@ int main() {
             continue;
         }
 
-        pthread_t thread_id;
+        /*
+        * If the program waits until completing the tasks for a single client, then requests from other clients will be rejected.
+        * So, we can use threads which is a lightweight mini-process that runs inside a program. It allows a program to do multiple things at the same time.
+        * In this program, each client gets its own thread. So, multiple clients can be handled simultaneosly.
+        */
+        pthread_t thread_id; // Declares a thread identifier (a unique ID for the thread)
+
+        /*
+        * pthread_create() function will create a new thread and run the necessary process inside it.
+        * In the first argument, you pass the identifier of the thread.
+        * Second argument is to specify attributes of the thread. In this program, it is NULL as we want it as a default.
+        * Third argument specify the process to run inside the thread, which is a function that returns a void pointer and takes a single argument that is a void pointer.
+        * Forth argument is a void pointer which is the argument that we should pass to run the function we defined in third argument.
+        */
         if (pthread_create(&thread_id, NULL, handle_client, client_socket) != 0) {
             perror("Thread creation failed");
             free(client_socket);
         }
 
-        pthread_detach(thread_id);
+        pthread_detach(thread_id); // You tells the system that you don't need this thread anymore and clean its resources when it finishes.
     }
 
-    close(server_socket);
+    close(server_socket); //Shutting down the Server and free up the resources used by the socket.
     return 0;
 }
