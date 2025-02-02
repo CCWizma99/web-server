@@ -28,8 +28,19 @@ const char *get_mime_type(const char *path) {
     return "application/octet-stream"; // Default for unknown files
 }
 
+/*
+ * serve_file() function is used to send a file to a client over a socket.
+ * It takes 2 arguments.
+ * First argument is the file descriptor of the client socket.
+ * Second argument is the file to serve and the file path will not be changed inside the function.
+ */
 void serve_file(int client_socket, const char *file_path) {
+    /*
+     * The stat struct comes from sys/stat.h header file.
+     * That structure holds information about a file such as file size, permissions. type of file and etc.
+     */
     struct stat file_stat;
+
     
     if (stat(file_path, &file_stat) < 0 || S_ISDIR(file_stat.st_mode)) {
         const char *error_msg = 
@@ -70,36 +81,77 @@ void serve_file(int client_socket, const char *file_path) {
     close(client_socket);
 }
 
+/*
+ * We created a thread for each client and inside the thread we are running handle_client() function to perform necessary tasks on client request.
+ * handle_client() function returns NULL after the execution, thus we used return type as void pointer.
+ * pthread_create() function passes a void pointer (4th arg in that function) as the parameter of the function which is performing inside the thread.
+   you can see that as 'void *arg' here.
+ */
 void *handle_client(void *arg) {
-    int client_socket = *(int *)arg;
-    free(arg);
+    int client_socket = *(int *)arg; // Gets the client socket's file descriptor which we need when we work with OS.
+    free(arg); // While we got the file descriptor of client socket, we are freeing that memory allocated for arg (client_socket in main function), so we will not have memory leaks later on.
 
-    char buffer[2048];
+    char buffer[2048]; // To temporarily store incoming requests from the client.
+
+    /*
+     * recv() function is used to read data from the client_socket and store in buffer.
+     * Third argument specifies the size of buffer size with a 1 space left which will be used to store a null terminator (\0).
+     * Forth argument is used to specify extra options. But, we have used default which is 0.
+     */
     recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
-    // Extract requested file path
+    /*
+     * Client's HTTP request is consist of 3 parts, Method, URL and Protocol.
+     * We will need to extract those 3 parts seperately to handle the user request efficiently.
+     * Method refers to the HTTP method of the request.
+     * URL specifies the requested URL (e.g., /index.html).
+     * Protocol specifies the HTTP protocol version (e.g., HTTP/1.1).
+
+     * After defining the strings (array of characters) for those 3 parts, use sscanf function will be used to capture different parts in the HTTP request.
+     * As the first argument in the sscanf() function, add the source.
+     * As the second argument, specify the format how you want to seperate the source. If you are extracting a string, amke sure you keep 1 space for null terminator.
+     * Other arguments are the pointers to the locations where the separated parts are stored. 
+     * While array variables are already a pointer, do not use & (e.g., &method).
+     */
     char method[16], url[256], protocol[32];
     sscanf(buffer, "%15s %255s %31s", method, url, protocol);
 
+    /*
+     * The server is lightweight and it will only handle GET request.
+     * That means server will serve static files.
+     * So, if a user make a request other than a GET, server will stop serving to that user.
+     */
     if (strcmp(method, "GET") != 0) {
         close(client_socket);
         return NULL;
     }
 
-    // Prevent directory traversal attacks
+    /* 
+     * Not mandatory, but if somebody tries to access files in other directories than where you serve
+       This code snippet will stop it. 
+     * '..' means "go up one directory". If this was found in the user will be directed to the DEFAULT_FILE which is homepage.
+     * To serve any file, we will use serve_file().
+     */
     if (strstr(url, "..")) {
         serve_file(client_socket, DEFAULT_FILE);
         return NULL;
     }
 
-    // If root ("/") is requested, serve default file
-    char file_path[512];
+    char file_path[512]; // This is used to store the correct file path to serve the client.
     if (strcmp(url, "/") == 0) {
-        snprintf(file_path, sizeof(file_path), "%s%s", WEB_ROOT, DEFAULT_FILE);
+        /*
+         * snprintf() function can be used to make a formatted string and store it inside a variable.
+         * First argument specifies the variable, where the formatted string is saved.
+         * Second argument specifies the size of that variable or maximum number of characters that can be stored.
+         * Third argument specifies the format of the string.
+         * Other arguments will be necessary values for the specified format.
+         */
+        snprintf(file_path, sizeof(file_path), "%s%s", WEB_ROOT, DEFAULT_FILE); // If requested file is '/', send the DEFAULT_FILE.
     } else {
         snprintf(file_path, sizeof(file_path), "%s%s", WEB_ROOT, url + 1); // Remove leading "/"
     }
 
+    //Finally, serve the file using serve_file() function by passing the client_socket and file_path.
     serve_file(client_socket, file_path);
     return NULL;
 }
