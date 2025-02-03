@@ -41,11 +41,25 @@ void serve_file(int client_socket, const char *file_path) {
      */
     struct stat file_stat;
 
-    
+    /*
+     * stat() function can be used to get file information by passing 2 arguments.
+     * First argument specifies the file path.
+     * Second argument is the location where you want to save the information about the file.
+       It should be a pointer in the type of stat struct.
+     * If stat() function failed to find the file in the specified path, it will return -1.
+     * Even though stat() function was able to access the specified file path, it could be a directory. In that case, it should not be served.
+     * So, S_ISDIR() function will be used to check whether the accessed file is a directory or not.
+     * If conditions are not met, a 404 page will be showed.
+     */
     if (stat(file_path, &file_stat) < 0 || S_ISDIR(file_stat.st_mode)) {
         const char *error_msg = 
             "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
             "<html><body><h1>404 Not Found</h1></body></html>";
+        /*
+         * send() function is used to send data through a socket.
+         * First argument specifies the socket descriptor representing the connection with the client.
+         * Second argument is the message that will be sent (a string).
+         */
         send(client_socket, error_msg, strlen(error_msg), 0);
         shutdown(client_socket, SHUT_WR);
         close(client_socket);
@@ -151,7 +165,7 @@ void *handle_client(void *arg) {
         snprintf(file_path, sizeof(file_path), "%s%s", WEB_ROOT, url + 1); // Remove leading "/"
     }
 
-    //Finally, serve the file using serve_file() function by passing the client_socket and file_path.
+    // Finally, serve the file using serve_file() function by passing the client_socket and file_path.
     serve_file(client_socket, file_path);
     return NULL;
 }
