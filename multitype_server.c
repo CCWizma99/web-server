@@ -59,32 +59,60 @@ void serve_file(int client_socket, const char *file_path) {
          * send() function is used to send data through a socket.
          * First argument specifies the socket descriptor representing the connection with the client.
          * Second argument is the message that will be sent (a string).
+         * Third argument specifies the length of the message or how many bytes to send.
+         * Forth argument is 0 as we do not need special options.
          */
         send(client_socket, error_msg, strlen(error_msg), 0);
-        shutdown(client_socket, SHUT_WR);
-        close(client_socket);
+        /*
+         * After sending the 404 response, the server stops writing but ensures the client has time to process the response before closing the connection.
+         */
+        shutdown(client_socket, SHUT_WR); // Stop sending but still allow reading
+        close(client_socket); // Fully close the connection.
         return;
     }
 
-    FILE *file = fopen(file_path, "rb"); // Use "rb" to handle binary files properly
-    if (!file) {
-        serve_file(client_socket, DEFAULT_FILE);
-        return;
+    /*
+     * Open the file at file_path for reading (r) in binary mode (b).
+     * Binary mode is for serving both text and binary files.
+     */
+    FILE *file = fopen(file_path, "rb"); // 'rb' is for opening the file for reading in binary mode.
+
+    const char *mime_type = get_mime_type(file_path); // Get MIME type of the file
+
+    if (!file) {    
+        if (strcmp(mime_type, "text/html") == 0) {
+            // If it's an HTML page, show a 404 error page
+            const char *error_msg =
+                "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
+                "<html><body><h1>404 Not Found</h1></body></html>";
+            send(client_socket, error_msg, strlen(error_msg), 0);
+        } 
+        else {
+            // For other files (images, CSS, JS, etc.), just send a 404 response
+            const char *error_msg =
+                "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+            send(client_socket, error_msg, strlen(error_msg), 0);
+        }
     }
 
-    char buffer[4096];
-    size_t bytes_read;
-    
-    // Get MIME type
-    const char *mime_type = get_mime_type(file_path);
-
-    // Send HTTP Header
+    /*
+     * Send HTTP Header, so the browser know how to handle the file properly.
+     */
     char header[256];
     snprintf(header, sizeof(header),
              "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n\r\n", mime_type);
     send(client_socket, header, strlen(header), 0);
 
-    // Send File Content
+    char buffer[4096]; // To temporarily hold data before sending to the client.
+    size_t bytes_read; // To track how much data is read from the file.
+
+    /*
+     * After completing the confirmations about the file, we can send the file to the client using send().
+     * If the file we are sending is large, it is not a efficient to send the whole file at once. So, we send the file chunk by chunk.
+     * fread() reads up to sizeof(buffer) from file into buffer.
+     * bytes_read holds the actual number of bytes read. In the last chunk, it will be lesser than the buffer size.
+     * 
+     */
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         send(client_socket, buffer, bytes_read, 0);
     }
