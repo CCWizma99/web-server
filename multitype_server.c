@@ -108,18 +108,39 @@ void serve_file(int client_socket, const char *file_path) {
 
     /*
      * After completing the confirmations about the file, we can send the file to the client using send().
-     * If the file we are sending is large, it is not a efficient to send the whole file at once. So, we send the file chunk by chunk.
+     * If the file we are sending is large, it is not an efficient way to send the whole file at once. So, we send the file chunk by chunk.
      * fread() reads up to sizeof(buffer) from file into buffer.
      * bytes_read holds the actual number of bytes read. In the last chunk, it will be lesser than the buffer size.
-     * 
+     * First argument is the buffer which is where we store data temporarily for sending.
+     * Second argument tells fread() that read the file byte by byte.
+     * Third argument specify how many bytes to store (size of the buffer)
+     * Final argument is the pointer to the file we need to read.
      */
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         send(client_socket, buffer, bytes_read, 0);
     }
 
-    fclose(file);
+    fclose(file); // Closes the file that was opened by fopen() and resources are freed.
+    
+    /*
+     * Tell the client that the server will not send any more data.
+     * But the client might still send data back.
+     * This helps ensuring the client processes the full response.
+     */
     shutdown(client_socket, SHUT_WR);
+
+    /*
+     * Before we close the socket, client needs a moment to fully receive the shutdown signal before closing the socket.
+     * So, we can pause the execution for 1 millisecond (1000 microseconds).
+     * Without this some clients might not receive the data properly.
+     */
     usleep(1000);
+
+    /*
+     * Closes the socket and free up system resources.
+     * After this, no further communication can happen on this socket.
+     * But, server still runs until you close.
+    */
     close(client_socket);
 }
 
