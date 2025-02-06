@@ -10,8 +10,12 @@
 #define WEB_ROOT "./"  // Serve files from the current directory
 #define DEFAULT_FILE "index.html"
 
-// Function to determine MIME type
+// Function to identify the MIME type
 const char *get_mime_type(const char *path) {
+    /*
+     * strrchr() function is used to find the last occurance of a specific character and return a pointer to it.
+     * In this case we are getting the '.' (dot)'s location and return the pointer to it.
+     */
     const char *dot = strrchr(path, '.');
     if (!dot) return "application/octet-stream"; // Default for unknown files
 
@@ -86,6 +90,9 @@ void serve_file(int client_socket, const char *file_path) {
                 "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
                 "<html><body><h1>404 Not Found</h1></body></html>";
             send(client_socket, error_msg, strlen(error_msg), 0);
+            shutdown(client_socket, SHUT_WR);
+            usleep(1000);
+            close(client_socket);
         } 
         else {
             // For other files (images, CSS, JS, etc.), just send a 404 response
@@ -99,8 +106,15 @@ void serve_file(int client_socket, const char *file_path) {
      * Send HTTP Header, so the browser know how to handle the file properly.
      */
     char header[256];
-    snprintf(header, sizeof(header),
-             "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n\r\n", mime_type);
+    
+    /*
+     * snprintf() function formats a string safely into header, ensuring it does not exceed 256 bytes.
+     * First argument specifies where to write the formatted string.
+     * Second argument specifies the maximum size of the string, more than that will not formatted.
+     * Third argument is the string to be formatted.
+     * Other arguments are values for formatting the string.
+     */
+    snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n\r\n", mime_type);
     send(client_socket, header, strlen(header), 0);
 
     char buffer[4096]; // To temporarily hold data before sending to the client.
